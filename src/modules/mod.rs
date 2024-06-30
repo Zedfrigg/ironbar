@@ -36,8 +36,6 @@ pub mod label;
 pub mod launcher;
 #[cfg(feature = "music")]
 pub mod music;
-#[cfg(feature = "networkmanager")]
-pub mod networkmanager;
 #[cfg(feature = "notifications")]
 pub mod notifications;
 pub mod script;
