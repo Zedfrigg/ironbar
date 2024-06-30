@@ -2,6 +2,8 @@
 pub enum ExitCode {
     GtkDisplay = 1,
     CreateBars = 2,
+    IpcResponseError = 3,
+    WaylandDispatchError = 4,
 }
 
 pub const ERR_MUTEX_LOCK: &str = "Failed to get lock on Mutex";
