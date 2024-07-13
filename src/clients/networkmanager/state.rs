@@ -1,7 +1,8 @@
 use color_eyre::Result;
 
 use crate::clients::networkmanager::dbus::{
-    ActiveConnectionDbusProxyBlocking, DeviceDbusProxyBlocking, DeviceState, DeviceType,
+    AccessPointDbusProxyBlocking, ActiveConnectionDbusProxyBlocking, DeviceDbusProxyBlocking,
+    DeviceState, DeviceType, DeviceWirelessDbusProxyBlocking,
 };
 use crate::clients::networkmanager::PathMap;
 
@@ -33,6 +34,8 @@ pub enum WifiState {
 #[derive(Clone, Debug)]
 pub struct WifiConnectedState {
     pub ssid: String,
+    /// Strength in percentage, from 0 to 100.
+    pub strength: u8,
 }
 
 #[derive(Clone, Debug)]
@@ -82,29 +85,43 @@ pub(super) fn determine_wired_state(
 }
 
 pub(super) fn determine_wifi_state(
+    dbus_connection: &zbus::blocking::Connection,
     devices: &PathMap<DeviceDbusProxyBlocking>,
 ) -> Result<WifiState> {
     let mut present = false;
     let mut enabled = false;
-    let mut connected = false;
+    let mut connected = None;
 
     for device in devices.values() {
         if device.device_type()? == DeviceType::Wifi {
             present = true;
             if device.state()?.is_enabled() {
                 enabled = true;
-                if device.state()? == DeviceState::Activated {
-                    connected = true;
+
+                let wireless_device = DeviceWirelessDbusProxyBlocking::builder(dbus_connection)
+                    .path(device.path().clone())?
+                    .build()?;
+                let primary_access_point_path = wireless_device.active_access_point()?;
+                if primary_access_point_path.as_str() != "/" {
+                    connected = Some(
+                        AccessPointDbusProxyBlocking::builder(dbus_connection)
+                            .path(primary_access_point_path)?
+                            .build()?,
+                    );
                     break;
                 }
             }
         }
     }
 
-    if connected {
+    if let Some(access_point) = connected {
+        let ssid = access_point
+            .ssid()
+            .map(|x| String::from_utf8_lossy(&x).to_string())
+            .unwrap_or_else(|_| "unkown".into());
         Ok(WifiState::Connected(WifiConnectedState {
-            // TODO: Implement obtaining SSID
-            ssid: "unknown".into(),
+            ssid,
+            strength: access_point.strength().unwrap_or(0),
         }))
     } else if enabled {
         Ok(WifiState::Disconnected)

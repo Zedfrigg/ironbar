@@ -64,7 +64,10 @@ impl Client {
             ($client:ident) => {
                 $client.state.set(State {
                     wired: determine_wired_state(&read_lock!($client.devices))?,
-                    wifi: determine_wifi_state(&read_lock!($client.devices))?,
+                    wifi: determine_wifi_state(
+                        &$client.dbus_connection,
+                        &read_lock!($client.devices),
+                    )?,
                     cellular: determine_cellular_state(&read_lock!($client.devices))?,
                     vpn: $client.state.get_cloned().vpn,
                 });
@@ -178,7 +181,7 @@ impl Client {
         });
         self.0.state.set(State {
             wired: determine_wired_state(&read_lock!(self.0.devices))?,
-            wifi: determine_wifi_state(&read_lock!(self.0.devices))?,
+            wifi: determine_wifi_state(&self.0.dbus_connection, &read_lock!(self.0.devices))?,
             cellular: determine_cellular_state(&read_lock!(self.0.devices))?,
             vpn: determine_vpn_state(&read_lock!(self.0.active_connections))?,
         });

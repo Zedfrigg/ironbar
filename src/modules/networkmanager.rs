@@ -111,7 +111,17 @@ impl Module<GtkBox> for NetworkManagerModule {
                 WiredState::NotPresent | WiredState::Unknown => "",
             });
             update_icon!(wifi_icon, wifi, {
-                WifiState::Connected(_) => "icon:network-wireless-connected-symbolic",
+                WifiState::Connected(state) => {
+                    let icons = [
+                        "icon:network-wireless-signal-none-symbolic",
+                        "icon:network-wireless-signal-weak-symbolic",
+                        "icon:network-wireless-signal-ok-symbolic",
+                        "icon:network-wireless-signal-good-symbolic",
+                        "icon:network-wireless-signal-excellent-symbolic",
+                    ];
+                    let n = strengh_to_level(state.strength, icons.len());
+                    icons[n]
+                },
                 WifiState::Disconnected => "icon:network-wireless-offline-symbolic",
                 WifiState::Disabled => "icon:network-wireless-hardware-disabled-symbolic",
                 WifiState::NotPresent | WifiState::Unknown => "",
@@ -132,4 +142,42 @@ impl Module<GtkBox> for NetworkManagerModule {
     }
 
     module_impl!("networkmanager");
+}
+
+/// Convert strength level (from 0-100), to a level (from 0 to `number_of_levels-1`).
+const fn strengh_to_level(strength: u8, number_of_levels: usize) -> usize {
+    // Strength levels based for the one show by [`nmcli dev wifi list`](https://github.com/NetworkManager/NetworkManager/blob/83a259597000a88217f3ccbdfe71c8114242e7a6/src/libnmc-base/nm-client-utils.c#L700-L727):
+    // match strength {
+    //     0..=4 => 0,
+    //     5..=29 => 1,
+    //     30..=54 => 2,
+    //     55..=79 => 3,
+    //     80.. => 4,
+    // }
+
+    // to make it work with a custom number of levels, we approach the logic above with the logic
+    // below (0 for < 5, and a linear interpolation for 5 to 105).
+    // TODO: if there are more than 20 levels, the last level will be out of scale, and never be
+    // reach.
+    if strength < 5 {
+        return 0;
+    }
+    (strength as usize - 5) * (number_of_levels - 1) / 100 + 1
+}
+
+// Just to make sure my implementation still follow the original logic
+#[cfg(test)]
+#[test]
+fn test_strength_to_level() {
+    assert_eq!(strengh_to_level(0, 5), 0);
+    assert_eq!(strengh_to_level(4, 5), 0);
+    assert_eq!(strengh_to_level(5, 5), 1);
+    assert_eq!(strengh_to_level(6, 5), 1);
+    assert_eq!(strengh_to_level(29, 5), 1);
+    assert_eq!(strengh_to_level(30, 5), 2);
+    assert_eq!(strengh_to_level(54, 5), 2);
+    assert_eq!(strengh_to_level(55, 5), 3);
+    assert_eq!(strengh_to_level(79, 5), 3);
+    assert_eq!(strengh_to_level(80, 5), 4);
+    assert_eq!(strengh_to_level(100, 5), 4);
 }
