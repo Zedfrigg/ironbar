@@ -1,3 +1,5 @@
+mod config;
+
 use color_eyre::Result;
 use futures_lite::StreamExt;
 use futures_signals::signal::SignalExt;
@@ -21,6 +23,9 @@ use crate::{glib_recv, module_impl, send_async, spawn};
 pub struct NetworkManagerModule {
     #[serde(default = "default_icon_size")]
     icon_size: i32,
+
+    #[serde(default)]
+    icons: config::IconsConfig,
 
     #[serde(flatten)]
     pub common: Option<CommonConfig>,
@@ -106,34 +111,27 @@ impl Module<GtkBox> for NetworkManagerModule {
             }
 
             update_icon!(wired_icon, wired, {
-                WiredState::Connected => "icon:network-wired-symbolic",
-                WiredState::Disconnected => "icon:network-wired-disconnected-symbolic",
+                WiredState::Connected => &self.icons.wired.connected,
+                WiredState::Disconnected => &self.icons.wired.disconnected,
                 WiredState::NotPresent | WiredState::Unknown => "",
             });
             update_icon!(wifi_icon, wifi, {
                 WifiState::Connected(state) => {
-                    let icons = [
-                        "icon:network-wireless-signal-none-symbolic",
-                        "icon:network-wireless-signal-weak-symbolic",
-                        "icon:network-wireless-signal-ok-symbolic",
-                        "icon:network-wireless-signal-good-symbolic",
-                        "icon:network-wireless-signal-excellent-symbolic",
-                    ];
-                    let n = strengh_to_level(state.strength, icons.len());
-                    icons[n]
+                    let n = strengh_to_level(state.strength, self.icons.wifi.levels.len());
+                    &self.icons.wifi.levels[n]
                 },
-                WifiState::Disconnected => "icon:network-wireless-offline-symbolic",
-                WifiState::Disabled => "icon:network-wireless-hardware-disabled-symbolic",
+                WifiState::Disconnected => &self.icons.wifi.disconnected,
+                WifiState::Disabled => &self.icons.wifi.disabled,
                 WifiState::NotPresent | WifiState::Unknown => "",
             });
             update_icon!(cellular_icon, cellular, {
-                CellularState::Connected => "icon:network-cellular-connected-symbolic",
-                CellularState::Disconnected => "icon:network-cellular-offline-symbolic",
-                CellularState::Disabled => "icon:network-cellular-hardware-disabled-symbolic",
+                CellularState::Connected => &self.icons.cellular.connected,
+                CellularState::Disconnected => &self.icons.cellular.disconnected,
+                CellularState::Disabled => &self.icons.cellular.disabled,
                 CellularState::NotPresent | CellularState::Unknown => "",
             });
             update_icon!(vpn_icon, vpn, {
-                VpnState::Connected(_) => "icon:network-vpn-symbolic",
+                VpnState::Connected(_) => &self.icons.vpn.connected,
                 VpnState::Disconnected | VpnState::Unknown => "",
             });
         });
