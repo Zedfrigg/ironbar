@@ -112,7 +112,8 @@ impl Module<GtkBox> for NetworkManagerModule {
 
             match &state.wifi {
                 WifiState::Connected(state) => {
-                    wifi_icon.set_tooltip_text(Some(&state.ssid));
+                    let tooltip = format!("{}\n{}/{}", state.ssid, state.ip4_address, state.ip4_prefix);
+                    wifi_icon.set_tooltip_text(Some(&tooltip));
                 },
                 _ => {
                     wifi_icon.set_tooltip_text(None);
