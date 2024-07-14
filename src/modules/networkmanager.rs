@@ -110,6 +110,15 @@ impl Module<GtkBox> for NetworkManagerModule {
                 };
             }
 
+            match &state.wifi {
+                WifiState::Connected(state) => {
+                    wifi_icon.set_tooltip_text(Some(&state.ssid));
+                },
+                _ => {
+                    wifi_icon.set_tooltip_text(None);
+                },
+            }
+
             update_icon!(wired_icon, wired, {
                 WiredState::Connected => &self.icons.wired.connected,
                 WiredState::Disconnected => &self.icons.wired.disconnected,
