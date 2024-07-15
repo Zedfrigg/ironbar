@@ -5,6 +5,7 @@ use crate::clients::networkmanager::dbus::{
     DeviceState, DeviceType, DeviceWirelessDbusProxyBlocking, Ip4ConfigDbusProxyBlocking,
 };
 use crate::clients::networkmanager::PathMap;
+use crate::{error, read_lock, spawn_blocking, spawn_blocking_result, write_lock};
 
 #[derive(Clone, Debug)]
 pub struct State {
@@ -91,10 +92,11 @@ pub(super) fn determine_wired_state(
     }
 }
 
-pub(super) fn determine_wifi_state(
-    dbus_connection: &zbus::blocking::Connection,
-    devices: &PathMap<DeviceDbusProxyBlocking>,
-) -> Result<WifiState> {
+pub(super) fn determine_wifi_state(client: &super::Client) -> Result<WifiState> {
+    let dbus_connection = &client.0.dbus_connection;
+    let devices = &read_lock!(client.0.devices);
+    let access_point_ = &client.0.access_point;
+
     let mut present = false;
     let mut enabled = false;
     let mut connected = None;
@@ -133,11 +135,11 @@ pub(super) fn determine_wifi_state(
             .path(device.ip4_config()?.clone())?
             .build()?;
         let address_data = ip4config.address_data()?;
-        // pick the first address. not sure if there are cases when there are more than one address
-        // (at least for wifi).
+        // Pick the first address. Not sure if there are cases when there are more than one
+        // address.
+        // These could fail if the access point concurrently changes.
         let address = &address_data
-            .iter()
-            .next()
+            .first()
             .ok_or_else(|| Report::msg("No address in IP4Config"))?;
         let ip4_address = address
             .get("address")
@@ -146,12 +148,51 @@ pub(super) fn determine_wifi_state(
             .get("prefix")
             .ok_or_else(|| Report::msg("IP address data object must have a prefix"))?;
 
+        let strength = access_point.strength()?;
+
+        'block: {
+            if let Some((ref path, _)) = *read_lock!(access_point_) {
+                if path == access_point.path() {
+                    break 'block;
+                }
+            }
+
+            let access_point_path = access_point.path().to_owned();
+
+            *write_lock!(*access_point_) = Some((access_point_path.clone(), access_point));
+
+            let client = client.0.clone();
+            spawn_blocking_result!({
+                let changes = {
+                    let access_point = read_lock!(client.access_point);
+                    let Some((_, access_point)) = access_point.as_ref() else {
+                        return Ok(());
+                    };
+                    access_point.receive_strength_changed()
+                };
+
+                for _ in changes {
+                    if read_lock!(client.access_point)
+                        .as_ref()
+                        .map_or(false, |(p, _)| *p != access_point_path)
+                    {
+                        break;
+                    }
+
+                    tracing::trace!("accesspoint strength changed");
+                    client.update_state_for_device_change()?;
+                }
+
+                Ok(())
+            });
+        }
+
         Ok(WifiState::Connected(WifiConnectedState {
             ssid,
             bssid,
             ip4_address: String::try_from(ip4_address.to_owned()).unwrap_or_default(),
             ip4_prefix: u32::try_from(ip4_prefix.to_owned()).unwrap_or_default(),
-            strength: access_point.strength().unwrap_or(0),
+            strength,
         }))
     } else if enabled {
         Ok(WifiState::Disconnected)
