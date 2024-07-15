@@ -10,64 +10,77 @@ Supports wired ethernet, wifi, cellular data and VPN connections among others.
 
 > Type: `networkmanager`
 
-| Name        | Type      | Default | Description             |
-|-------------|-----------|---------|-------------------------|
-| `icon_size` | `integer` | `24`    | Size to render icon at. |
+| Name                          | Type       | Default                                               | Description                                       |
+| ----------------------------- | ---------- | ----------------------------------------------------- | ------------------------------------------------- |
+| `icon_size`                   | `integer`  | `24`                                                  | Size to render icon at.                           |
+| `icons.wired.connected`       | `string`   | `icon:network-wired-symbolic`                         | Icon to show when there is a wired connection     |
+| `icons.wired.disconnected`    | `string`   | `icon:network-wired-symbolic`                         | Icon to show when there is no wired connection    |
+| `icons.wifi.levels`           | `string[]` | `["icon:network-wireless-signal-none-symbolic", ...]` | Icon to show when there is no wifi connection     |
+| `icons.wifi.disconnected`     | `string`   | `icon:network-wireless-offline-symbolic`              | Icon to show when there is no wifi connection     |
+| `icons.wifi.disabled`         | `string`   | `icon:network-wireless-hardware-disabled-symbolic`    | Icon to show when wifi is disabled                |
+| `icons.cellular.connected`    | `string`   | `icon:network-cellular-connected-symbolic`            | Icon to show when there is a cellular connection  |
+| `icons.cellular.disconnected` | `string`   | `icon:network-cellular-offline-symbolic`              | Icon to show when there is no cellular connection |
+| `icons.cellular.disabled`     | `string`   | `icon:network-cellular-hardware-disabled-symbolic`    | Icon to show when cellular connection is disabled |
+| `icons.vpn.connected`         | `string`   | `icon:network-vpn-symbolic`                           | Icon to show when there is a VPN connection       |
 
 <details>
-  <summary>JSON</summary>
+<summary>JSON</summary>
 
-  ```json
-  {
-    "end": [
-      {
-        "type": "networkmanager",
-        "icon_size": 32
-      }
-    ]
-  }
-  ```
+```json
+{
+  "end": [
+    {
+      "type": "networkmanager",
+      "icon_size": 32
+    }
+  ]
+}
+```
+
 </details>
 
 <details>
-  <summary>TOML</summary>
+<summary>TOML</summary>
 
-  ```toml
-  [[end]]
-  type = "networkmanager"
-  icon_size = 32
-  ```
+```toml
+[[end]]
+type = "networkmanager"
+icon_size = 32
+```
+
 </details>
 
 <details>
-  <summary>YAML</summary>
+<summary>YAML</summary>
 
-  ```yaml
-  end:
-    - type: "networkmanager"
-      icon_size: 32
-  ```
+```yaml
+end:
+  - type: "networkmanager"
+    icon_size: 32
+```
+
 </details>
 
 <details>
-  <summary>Corn</summary>
+<summary>Corn</summary>
 
-  ```corn
-  {
-    end = [
-      {
-        type = "networkmanager"
-        icon_size = 32
-      }
-    ]
-  }
-  ```
+```corn
+{
+  end = [
+    {
+      type = "networkmanager"
+      icon_size = 32
+    }
+  ]
+}
+```
+
 </details>
 
 ## Styling
 
 | Selector               | Description                      |
-|------------------------|----------------------------------|
+| ---------------------- | -------------------------------- |
 | `.networkmanager`      | NetworkManager widget container. |
 | `.networkmanger .icon` | NetworkManager widget icons.     |
 

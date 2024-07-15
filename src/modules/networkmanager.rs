@@ -1,3 +1,5 @@
+mod config;
+
 use color_eyre::Result;
 use futures_lite::StreamExt;
 use futures_signals::signal::SignalExt;
@@ -21,6 +23,9 @@ use crate::{glib_recv, module_impl, send_async, spawn};
 pub struct NetworkManagerModule {
     #[serde(default = "default_icon_size")]
     icon_size: i32,
+
+    #[serde(default)]
+    icons: config::IconsConfig,
 
     #[serde(flatten)]
     pub common: Option<CommonConfig>,
@@ -105,25 +110,38 @@ impl Module<GtkBox> for NetworkManagerModule {
                 };
             }
 
+            match &state.wifi {
+                WifiState::Connected(state) => {
+                    let tooltip = format!("{}\n{}/{}", state.ssid, state.ip4_address, state.ip4_prefix);
+                    wifi_icon.set_tooltip_text(Some(&tooltip));
+                },
+                _ => {
+                    wifi_icon.set_tooltip_text(None);
+                },
+            }
+
             update_icon!(wired_icon, wired, {
-                WiredState::Connected => "icon:network-wired-symbolic",
-                WiredState::Disconnected => "icon:network-wired-disconnected-symbolic",
+                WiredState::Connected => &self.icons.wired.connected,
+                WiredState::Disconnected => &self.icons.wired.disconnected,
                 WiredState::NotPresent | WiredState::Unknown => "",
             });
             update_icon!(wifi_icon, wifi, {
-                WifiState::Connected(_) => "icon:network-wireless-connected-symbolic",
-                WifiState::Disconnected => "icon:network-wireless-offline-symbolic",
-                WifiState::Disabled => "icon:network-wireless-hardware-disabled-symbolic",
+                WifiState::Connected(state) => {
+                    let n = strengh_to_level(state.strength, self.icons.wifi.levels.len());
+                    &self.icons.wifi.levels[n]
+                },
+                WifiState::Disconnected => &self.icons.wifi.disconnected,
+                WifiState::Disabled => &self.icons.wifi.disabled,
                 WifiState::NotPresent | WifiState::Unknown => "",
             });
             update_icon!(cellular_icon, cellular, {
-                CellularState::Connected => "icon:network-cellular-connected-symbolic",
-                CellularState::Disconnected => "icon:network-cellular-offline-symbolic",
-                CellularState::Disabled => "icon:network-cellular-hardware-disabled-symbolic",
+                CellularState::Connected => &self.icons.cellular.connected,
+                CellularState::Disconnected => &self.icons.cellular.disconnected,
+                CellularState::Disabled => &self.icons.cellular.disabled,
                 CellularState::NotPresent | CellularState::Unknown => "",
             });
             update_icon!(vpn_icon, vpn, {
-                VpnState::Connected(_) => "icon:network-vpn-symbolic",
+                VpnState::Connected(_) => &self.icons.vpn.connected,
                 VpnState::Disconnected | VpnState::Unknown => "",
             });
         });
@@ -132,4 +150,42 @@ impl Module<GtkBox> for NetworkManagerModule {
     }
 
     module_impl!("networkmanager");
+}
+
+/// Convert strength level (from 0-100), to a level (from 0 to `number_of_levels-1`).
+const fn strengh_to_level(strength: u8, number_of_levels: usize) -> usize {
+    // Strength levels based for the one show by [`nmcli dev wifi list`](https://github.com/NetworkManager/NetworkManager/blob/83a259597000a88217f3ccbdfe71c8114242e7a6/src/libnmc-base/nm-client-utils.c#L700-L727):
+    // match strength {
+    //     0..=4 => 0,
+    //     5..=29 => 1,
+    //     30..=54 => 2,
+    //     55..=79 => 3,
+    //     80.. => 4,
+    // }
+
+    // to make it work with a custom number of levels, we approach the logic above with the logic
+    // below (0 for < 5, and a linear interpolation for 5 to 105).
+    // TODO: if there are more than 20 levels, the last level will be out of scale, and never be
+    // reach.
+    if strength < 5 {
+        return 0;
+    }
+    (strength as usize - 5) * (number_of_levels - 1) / 100 + 1
+}
+
+// Just to make sure my implementation still follow the original logic
+#[cfg(test)]
+#[test]
+fn test_strength_to_level() {
+    assert_eq!(strengh_to_level(0, 5), 0);
+    assert_eq!(strengh_to_level(4, 5), 0);
+    assert_eq!(strengh_to_level(5, 5), 1);
+    assert_eq!(strengh_to_level(6, 5), 1);
+    assert_eq!(strengh_to_level(29, 5), 1);
+    assert_eq!(strengh_to_level(30, 5), 2);
+    assert_eq!(strengh_to_level(54, 5), 2);
+    assert_eq!(strengh_to_level(55, 5), 3);
+    assert_eq!(strengh_to_level(79, 5), 3);
+    assert_eq!(strengh_to_level(80, 5), 4);
+    assert_eq!(strengh_to_level(100, 5), 4);
 }
