@@ -3,7 +3,7 @@ mod sink_input;
 
 use crate::{APP_ID, arc_mut, lock, register_client, spawn_blocking};
 use libpulse_binding::callbacks::ListResult;
-use libpulse_binding::context::introspect::{Introspector, ServerInfo};
+use libpulse_binding::context::introspect::ServerInfo;
 use libpulse_binding::context::subscribe::{Facility, InterestMaskSet, Operation};
 use libpulse_binding::context::{Context, FlagSet, State};
 use libpulse_binding::mainloop::standard::{IterateResult, Mainloop};
@@ -24,11 +24,11 @@ type ArcMutVec<T> = Arc<Mutex<Vec<T>>>;
 pub enum Event {
     AddSink(Sink),
     UpdateSink(Sink),
-    RemoveSink(String),
+    RemoveSink,
 
-    AddInput(SinkInput),
-    UpdateInput(SinkInput),
-    RemoveInput(u32),
+    AddInput,
+    UpdateInput,
+    RemoveInput,
 }
 
 #[derive(Debug)]
@@ -51,10 +51,7 @@ struct Data {
 
 pub enum ConnectionState {
     Disconnected,
-    Connected {
-        context: Arc<Mutex<Context>>,
-        introspector: Introspector,
-    },
+    Connected,
 }
 
 impl Debug for ConnectionState {
@@ -64,7 +61,7 @@ impl Debug for ConnectionState {
             "{}",
             match self {
                 Self::Disconnected => "Disconnected",
-                Self::Connected { .. } => "Connected",
+                Self::Connected => "Connected",
             }
         )
     }
@@ -120,14 +117,9 @@ impl Client {
             error!("{err:?}");
         }
 
-        let introspector = lock!(context).introspect();
-
         {
             let mut inner = lock!(self.connection);
-            *inner = ConnectionState::Connected {
-                context,
-                introspector,
-            };
+            *inner = ConnectionState::Connected;
         }
 
         loop {
@@ -289,24 +281,6 @@ fn volume_to_percent(volume: ChannelVolumes) -> f64 {
     let base_delta = (Volume::NORMAL.0 - Volume::MUTED.0) as f64 / 100.0;
 
     ((avg - Volume::MUTED.0) as f64 / base_delta).round()
-}
-
-/// Converts a percentage volume into a Pulse volume value,
-/// which can be used for setting channel volumes.
-pub fn percent_to_volume(target_percent: f64) -> u32 {
-    let base_delta = (Volume::NORMAL.0 as f32 - Volume::MUTED.0 as f32) / 100.0;
-
-    if target_percent < 0.0 {
-        Volume::MUTED.0
-    } else if target_percent == 100.0 {
-        Volume::NORMAL.0
-    } else if target_percent >= 150.0 {
-        (Volume::NORMAL.0 as f32 * 1.5) as u32
-    } else if target_percent < 100.0 {
-        Volume::MUTED.0 + target_percent as u32 * base_delta as u32
-    } else {
-        Volume::NORMAL.0 + (target_percent - 100.0) as u32 * base_delta as u32
-    }
 }
 
 register_client!(Client, volume);

@@ -1,37 +1,22 @@
-use super::{ArcMutVec, Client, ConnectionState, Event, percent_to_volume, volume_to_percent};
+use super::{ArcMutVec, Client, Event};
 use crate::channels::SyncSenderExt;
 use crate::lock;
 use libpulse_binding::callbacks::ListResult;
 use libpulse_binding::context::Context;
 use libpulse_binding::context::introspect::SinkInputInfo;
 use libpulse_binding::context::subscribe::Operation;
-use std::sync::{Arc, Mutex, mpsc};
+use std::sync::{Arc, Mutex};
 use tokio::sync::broadcast;
 use tracing::{debug, error, instrument, trace};
 
 #[derive(Debug, Clone)]
 pub struct SinkInput {
     pub index: u32,
-    pub name: String,
-    pub volume: f64,
-    pub muted: bool,
-
-    pub can_set_volume: bool,
 }
 
 impl From<&SinkInputInfo<'_>> for SinkInput {
     fn from(value: &SinkInputInfo) -> Self {
-        Self {
-            index: value.index,
-            name: value
-                .name
-                .as_ref()
-                .map(ToString::to_string)
-                .unwrap_or_default(),
-            muted: value.mute,
-            volume: volume_to_percent(value.volume),
-            can_set_volume: value.has_volume && value.volume_writable,
-        }
+        Self { index: value.index }
     }
 }
 
@@ -39,36 +24,6 @@ impl Client {
     #[instrument(level = "trace")]
     pub fn sink_inputs(&self) -> Arc<Mutex<Vec<SinkInput>>> {
         self.data.sink_inputs.clone()
-    }
-
-    #[instrument(level = "trace")]
-    pub fn set_input_volume(&self, index: u32, volume_percent: f64) {
-        if let ConnectionState::Connected { introspector, .. } = &mut *lock!(self.connection) {
-            let (tx, rx) = mpsc::channel();
-
-            introspector.get_sink_input_info(index, move |info| {
-                let ListResult::Item(info) = info else {
-                    return;
-                };
-                tx.send_expect(info.volume);
-            });
-
-            let new_volume = percent_to_volume(volume_percent);
-
-            let mut volume = rx.recv().expect("to receive info");
-            for v in volume.get_mut() {
-                v.0 = new_volume;
-            }
-
-            introspector.set_sink_input_volume(index, &volume, None);
-        }
-    }
-
-    #[instrument(level = "trace")]
-    pub fn set_input_muted(&self, index: u32, muted: bool) {
-        if let ConnectionState::Connected { introspector, .. } = &mut *lock!(self.connection) {
-            introspector.set_sink_input_mute(index, muted, None);
-        }
     }
 }
 
@@ -119,7 +74,7 @@ pub fn add(
     trace!("adding {info:?}");
 
     lock!(inputs).push(info.into());
-    tx.send_expect(Event::AddInput(info.into()));
+    tx.send_expect(Event::AddInput);
 }
 
 fn update(
@@ -143,16 +98,15 @@ fn update(
         inputs[pos] = info.into();
     }
 
-    tx.send_expect(Event::UpdateInput(info.into()));
+    tx.send_expect(Event::UpdateInput);
 }
 
 fn remove(index: u32, inputs: &ArcMutVec<SinkInput>, tx: &broadcast::Sender<Event>) {
-    let mut inputs = lock!(inputs);
+    let inputs = lock!(inputs);
 
     trace!("removing {index}");
 
-    if let Some(pos) = inputs.iter().position(|s| s.index == index) {
-        let info = inputs.remove(pos);
-        tx.send_expect(Event::RemoveInput(info.index));
+    if let Some(_pos) = inputs.iter().position(|s| s.index == index) {
+        tx.send_expect(Event::RemoveInput);
     }
 }
