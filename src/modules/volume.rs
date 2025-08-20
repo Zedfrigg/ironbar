@@ -1,13 +1,13 @@
 use crate::channels::{AsyncSenderExt, BroadcastReceiverExt};
 use crate::clients::volume::{self, Event};
-use crate::config::{CommonConfig, LayoutConfig, TruncateMode};
+use crate::config::CommonConfig;
 use crate::gtk_helpers::IronbarGtkExt;
 use crate::modules::{
     Module, ModuleInfo, ModuleParts, ModuleUpdateEvent, PopupButton, WidgetContext,
 };
 use crate::{lock, module_impl, spawn};
 use gtk::prelude::*;
-use gtk::{Button, Image, Label, Scale, ToggleButton};
+use gtk::{Button, Image};
 use serde::Deserialize;
 use tokio::sync::mpsc;
 use tracing::trace;
@@ -15,33 +15,13 @@ use tracing::trace;
 #[derive(Debug, Clone, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct VolumeModule {
-    /// Maximum value to allow volume sliders to reach.
-    /// Pulse supports values > 100 but this may result in distortion.
-    ///
-    /// **Default**: `100`
-    #[serde(default = "default_max_volume")]
-    max_volume: f64,
-
     #[serde(default = "default_icon_size")]
     icon_size: i32,
 
     // -- Common --
-    /// See [truncate options](module-level-options#truncate-mode).
-    ///
-    /// **Default**: `null`
-    pub(crate) truncate: Option<TruncateMode>,
-
-    /// See [layout options](module-level-options#layout)
-    #[serde(default, flatten)]
-    layout: LayoutConfig,
-
     /// See [common options](module-level-options#common-options).
     #[serde(flatten)]
     pub common: Option<CommonConfig>,
-}
-
-const fn default_max_volume() -> f64 {
-    100.0
 }
 
 const fn default_icon_size() -> i32 {
@@ -49,14 +29,7 @@ const fn default_icon_size() -> i32 {
 }
 
 #[derive(Debug, Clone)]
-pub enum Update {
-    SinkChange(String),
-    SinkVolume(String, f64),
-    SinkMute(String, bool),
-
-    InputVolume(u32, f64),
-    InputMute(u32, bool),
-}
+pub enum Update {}
 
 impl Module<Button> for VolumeModule {
     type SendMessage = Event;
@@ -68,7 +41,7 @@ impl Module<Button> for VolumeModule {
         &self,
         _info: &ModuleInfo,
         context: &WidgetContext<Self::SendMessage, Self::ReceiveMessage>,
-        mut rx: mpsc::Receiver<Self::ReceiveMessage>,
+        _rx: mpsc::Receiver<Self::ReceiveMessage>,
     ) -> color_eyre::Result<()>
     where
         <Self as Module<Button>>::SendMessage: Clone,
@@ -102,8 +75,8 @@ impl Module<Button> for VolumeModule {
                     tx.send_update(Event::AddSink(sink)).await;
                 }
 
-                for input in inputs {
-                    tx.send_update(Event::AddInput(input)).await;
+                for _input in inputs {
+                    tx.send_update(Event::AddInput).await;
                 }
 
                 // recv loop
@@ -113,19 +86,6 @@ impl Module<Button> for VolumeModule {
                 }
             });
         }
-
-        // ui events
-        spawn(async move {
-            while let Some(update) = rx.recv().await {
-                match update {
-                    Update::SinkChange(name) => client.set_default_sink(&name),
-                    Update::SinkVolume(name, volume) => client.set_sink_volume(&name, volume),
-                    Update::SinkMute(name, muted) => client.set_sink_muted(&name, muted),
-                    Update::InputVolume(index, volume) => client.set_input_volume(index, volume),
-                    Update::InputMute(index, muted) => client.set_input_muted(index, muted),
-                }
-            }
-        });
 
         Ok(())
     }
@@ -177,13 +137,6 @@ impl Module<Button> for VolumeModule {
 
         Ok(ModuleParts::new(button, None))
     }
-}
-
-struct InputUi {
-    container: gtk::Box,
-    label: Label,
-    slider: Scale,
-    btn_mute: ToggleButton,
 }
 
 fn determine_volume_icon(muted: bool, volume: f64) -> String {
