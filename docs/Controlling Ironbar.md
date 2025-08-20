@@ -10,7 +10,8 @@ You can also view help per sub-command or command, for example using `ironbar va
 The CLI supports plaintext and JSON output. Plaintext will:
 
 - Print `ok` for empty success responses
-- Print the returned body for success responses
+- Print the returned body for each success response
+  - Some commands act on multiple objects, in which case the CLI will print one line for each body.
 - Print `error` to followed by the error on the next line for error responses. This is printed to `stderr`.
 
 Example:
@@ -34,12 +35,10 @@ All error responses will cause the CLI to exit code 3.
 The server listens on a Unix socket. 
 The path is printed on startup, and can usually be found at `/run/user/$UID/ironbar-ipc.sock`.
 
-Commands and responses are sent as JSON objects.
+Commands and responses are sent as JSON objects. 
+The JSON should be minified and must NOT contain any `\n` characters.
 
 Commands will have a `command` key, and a `subcommand` key when part of a sub-command.
-
-The message buffer is currently limited to `1024` bytes. 
-Particularly large messages will be truncated or cause an error.
 
 The full spec can be found below.
 
@@ -149,6 +148,9 @@ Each key/value pair is on its own `\n` separated newline. The key and value are 
 ```
 
 ### `bar`
+
+> [!NOTE]
+> If there are multiple bars by the same name, the `bar` subcommand will act on all of them and return a `multi` response for commands that get a value.
 
 #### `show`
 
@@ -321,6 +323,17 @@ The operation completed successfully, with response data.
 {
   "type": "ok_value",
   "value": "lorem ipsum"
+}
+```
+
+### `multi`
+
+The operation completed successfully on multiple objects, with response data.
+
+```json
+{
+  "type": "multi",
+  "values": ["lorem ipsum", "dolor sit"]
 }
 ```
 
